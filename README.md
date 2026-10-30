@@ -26,9 +26,27 @@ python main.py today                  # today's energy totals per source (GWh)
 python main.py smard                  # official BNetzA load + generation
 python main.py chart -o out.png       # generation vs load chart
 python main.py watch -i 60            # auto-refreshing snapshot
+python main.py web                    # web dashboard on 0.0.0.0:8000
 # or, after `pip install -e .`:
 de-energy now
 ```
+
+## Web UI
+
+```bash
+python main.py web --port 8000        # then open http://localhost:8000
+```
+
+A single-page dashboard showing the live grid picture — current load,
+total generation, renewable share, day-ahead spot price, per-source
+generation bars, and the stacked supply-vs-demand chart. The page fetches
+fresh data every 60 s; server-side responses are cached ~55 s so the
+upstream API isn't hammered. Pure stdlib (`http.server`) — no extra
+dependencies; `/chart.png` reuses the `chart` command's matplotlib figure
+(needs `matplotlib`, else that one image fails but the page still works).
+
+Endpoints: `/` dashboard · `/api/data` JSON snapshot · `/chart.png` ·
+`/healthz`.
 
 ## Data
 
@@ -56,7 +74,8 @@ de_energy_live/
   sources/
     energy_charts.py     Fraunhofer ISE energy-charts client
     smard.py             Bundesnetzagentur SMARD client
-  cli.py                 argparse CLI (now/today/smard/chart/watch)
+  cli.py                 argparse CLI (now/today/smard/chart/web/watch)
+  web.py                 stdlib http.server dashboard (/, /api/data, /chart.png)
 main.py                  thin entry point
 ```
 

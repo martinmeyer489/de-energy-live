@@ -195,14 +195,14 @@ def cmd_smard(_args: argparse.Namespace) -> None:
     print()
 
 
-def cmd_chart(args: argparse.Namespace) -> None:
+def build_chart_figure(mix: dict[str, TimeSeries]):
+    """Stacked generation vs load figure for the given power mix."""
     import matplotlib
 
     matplotlib.use("Agg")
     import matplotlib.dates as mdates
     import matplotlib.pyplot as plt
 
-    mix = energy_charts.fetch_power_mix(_today(), _today())
     as_of, _ = _generation_snapshot(mix)
     end = as_of or datetime.now(BERLIN).astimezone()
 
@@ -236,10 +236,21 @@ def cmd_chart(args: argparse.Namespace) -> None:
     ax.legend(loc="upper left", fontsize=7, ncol=2)
     ax.grid(alpha=0.3)
     fig.tight_layout()
+    return fig
 
+
+def cmd_chart(args: argparse.Namespace) -> None:
+    mix = energy_charts.fetch_power_mix(_today(), _today())
+    fig = build_chart_figure(mix)
     os.makedirs(os.path.dirname(args.out) or ".", exist_ok=True)
     fig.savefig(args.out, dpi=120)
     print(f"Saved {args.out}")
+
+
+def cmd_web(args: argparse.Namespace) -> None:
+    from . import web
+
+    web.serve(args.host, args.port)
 
 
 def cmd_watch(args: argparse.Namespace) -> None:
@@ -276,6 +287,11 @@ def main(argv: list[str] | None = None) -> int:
     pc = sub.add_parser("chart", help="render today's generation vs load to PNG")
     pc.add_argument("-o", "--out", default="charts/today.png")
     pc.set_defaults(f=cmd_chart)
+
+    pweb = sub.add_parser("web", help="live web dashboard (http.server)")
+    pweb.add_argument("--host", default="0.0.0.0")
+    pweb.add_argument("--port", type=int, default=8000)
+    pweb.set_defaults(f=cmd_web)
 
     pw = sub.add_parser("watch", help="auto-refreshing snapshot")
     pw.add_argument("-i", "--interval", type=int, default=300)
