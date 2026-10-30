@@ -19,3 +19,6 @@ de-energy = "de_energy_live.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["de_energy_live*"]
+
+[tool.setuptools.package-data]
+de_energy_live = ["*.geo.json"]

@@ -25,6 +25,7 @@ python main.py now --csv data/out.csv # snapshot + append to CSV
 python main.py today                  # today's energy totals per source (GWh)
 python main.py smard                  # official BNetzA load + generation
 python main.py chart -o out.png       # generation vs load chart
+python main.py regions                # snapshot per TSO control area
 python main.py watch -i 60            # auto-refreshing snapshot
 python main.py web                    # web dashboard on 0.0.0.0:8000
 # or, after `pip install -e .`:
@@ -45,8 +46,22 @@ upstream API isn't hammered. Pure stdlib (`http.server`) — no extra
 dependencies; `/chart.png` reuses the `chart` command's matplotlib figure
 (needs `matplotlib`, else that one image fails but the page still works).
 
-Endpoints: `/` dashboard · `/api/data` JSON snapshot · `/chart.png` ·
-`/healthz`.
+Endpoints: `/` dashboard · `/map` regional map · `/api/data` JSON
+snapshot · `/api/regions` per-zone JSON · `/geo/states` GeoJSON ·
+`/chart.png` · `/healthz`.
+
+### Regional map (`/map`)
+
+An Electricity Maps-style view of Germany split into its four TSO
+control areas — 50Hertz (east), Amprion (west/Ruhr), TenneT
+(north+south backbone), TransnetBW (Baden-Württemberg). Each zone's
+live net load and realised generation come from SMARD's per-region
+series (15-min resolution), and the map colours the federal states by
+selectable signals: estimated CO2 intensity (generation mix ×
+lifecycle emission factors), renewable share, net load, and
+self-sufficiency (generation/load). Click a region for its mix
+breakdown. State→zone assignment is approximate — control-area
+borders do not follow state borders exactly.
 
 ## Data
 
@@ -65,6 +80,7 @@ API endpoints used (all public, no auth):
 | `GET api.energy-charts.info/signal?country=de` | renewable-share forecast ("energy signal") |
 | `GET api.energy-charts.info/price?bzn=DE-LU` | day-ahead spot price |
 | `GET smard.de/app/chart_data/<filter>/DE/...` | official load & realised generation |
+| `GET smard.de/app/chart_data/<filter>/<50Hertz|Amprion|TenneT|TransnetBW>/...` | per-control-area load & generation |
 
 ## Layout
 
@@ -74,8 +90,10 @@ de_energy_live/
   sources/
     energy_charts.py     Fraunhofer ISE energy-charts client
     smard.py             Bundesnetzagentur SMARD client
-  cli.py                 argparse CLI (now/today/smard/chart/web/watch)
-  web.py                 stdlib http.server dashboard (/, /api/data, /chart.png)
+  cli.py                 argparse CLI (now/today/smard/chart/regions/web/watch)
+  regional.py            per-control-area snapshots (load, mix, CO2, self-sufficiency)
+  web.py                 stdlib http.server dashboard + regional map
+  bundeslaender.geo.json state polygons for the map (deutschlandGeoJSON, CC-BY)
 main.py                  thin entry point
 ```
 

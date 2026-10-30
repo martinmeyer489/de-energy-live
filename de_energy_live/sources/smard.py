@@ -16,6 +16,9 @@ from ..model import TimeSeries
 BASE = "https://www.smard.de/app/chart_data"
 REGION = "DE"
 
+# Control areas (TSO zones) SMARD also serves as region values
+REGIONS = ("DE", "50Hertz", "Amprion", "TenneT", "TransnetBW")
+
 # SMARD filter IDs — realised generation / consumption
 FILTER_NET_LOAD = 410  # Gesamte Netzlast (total grid load), demand
 GENERATION_FILTERS = {
@@ -45,11 +48,13 @@ def _get(url: str, timeout: int = 30) -> dict:
 INTERVAL_HOURS = {"quarterhour": 0.25, "hour": 1.0, "day": 24.0}
 
 
-def _fetch_series(filter_id: int, resolution: str) -> TimeSeries:
-    index = _get(f"{BASE}/{filter_id}/{REGION}/index_{resolution}.json")
+def _fetch_series(
+    filter_id: int, resolution: str, region: str = REGION
+) -> TimeSeries:
+    index = _get(f"{BASE}/{filter_id}/{region}/index_{resolution}.json")
     latest_block = index["timestamps"][-1]
     data = _get(
-        f"{BASE}/{filter_id}/{REGION}/{filter_id}_{REGION}_{resolution}_{latest_block}.json"
+        f"{BASE}/{filter_id}/{region}/{filter_id}_{region}_{resolution}_{latest_block}.json"
     )
     return parse_series(
         data["series"],
@@ -72,19 +77,23 @@ def parse_series(
     )
 
 
-def fetch_net_load(resolution: str = "quarterhour") -> TimeSeries:
+def fetch_net_load(
+    resolution: str = "quarterhour", region: str = REGION
+) -> TimeSeries:
     """Total German grid load (demand) in MW — SMARD filter 410."""
-    ts = _fetch_series(FILTER_NET_LOAD, resolution)
+    ts = _fetch_series(FILTER_NET_LOAD, resolution, region)
     ts.name = "Netzlast (grid load)"
     return ts
 
 
-def fetch_generation(resolution: str = "hour") -> dict[str, TimeSeries]:
+def fetch_generation(
+    resolution: str = "hour", region: str = REGION
+) -> dict[str, TimeSeries]:
     """Realised generation by source — 12 SMARD filter series."""
     out: dict[str, TimeSeries] = {}
     for fid, label in GENERATION_FILTERS.items():
         try:
-            ts = _fetch_series(fid, resolution)
+            ts = _fetch_series(fid, resolution, region)
         except Exception:
             continue  # individual filters can lag; skip failures
         ts.name = label

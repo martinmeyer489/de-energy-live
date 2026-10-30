@@ -239,6 +239,30 @@ def build_chart_figure(mix: dict[str, TimeSeries]):
     return fig
 
 
+def cmd_regions(_args: argparse.Namespace) -> None:
+    from . import regional
+
+    print("\nGermany by control area (smard.de / Bundesnetzagentur)\n")
+    data = regional.all_zones()
+    for name, z in data["zones"].items():
+        print(f"  {name} ({z['tso']})")
+        print(f"    Net load ........... {_fmt_mw(z['load_mw']):>8} MW")
+        print(f"    Generation ......... {_fmt_mw(z['total_generation_mw']):>8} MW")
+        if z["renewable_share_pct"] is not None:
+            print(f"    Renewable share .... {z['renewable_share_pct']:>7.1f} %")
+        if z["co2_intensity_gkwh"] is not None:
+            print(f"    CO2 intensity ...... {z['co2_intensity_gkwh']:>7.0f} g/kWh")
+        if z["self_sufficiency_pct"] is not None:
+            print(f"    Self-sufficiency ... {z['self_sufficiency_pct']:>7.1f} %")
+        if z["as_of"]:
+            t = datetime.fromisoformat(z["as_of"]).astimezone(BERLIN)
+            print(f"    as of {t:%H:%M} Europe/Berlin")
+        print()
+    for name, err in data["errors"].items():
+        print(f"  {name}: unavailable ({err})")
+    print()
+
+
 def cmd_chart(args: argparse.Namespace) -> None:
     mix = energy_charts.fetch_power_mix(_today(), _today())
     fig = build_chart_figure(mix)
@@ -287,6 +311,10 @@ def main(argv: list[str] | None = None) -> int:
     pc = sub.add_parser("chart", help="render today's generation vs load to PNG")
     pc.add_argument("-o", "--out", default="charts/today.png")
     pc.set_defaults(f=cmd_chart)
+
+    sub.add_parser(
+        "regions", help="per-control-area snapshot (50Hertz, Amprion, TenneT, TransnetBW)"
+    ).set_defaults(f=cmd_regions)
 
     pweb = sub.add_parser("web", help="live web dashboard (http.server)")
     pweb.add_argument("--host", default="0.0.0.0")
