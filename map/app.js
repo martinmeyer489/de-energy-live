@@ -161,10 +161,10 @@
       ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
       this._fillStroke(ctx, l);
       const ic = UNIT_ICONS[l.options.icon] || UNIT_ICONS._;
-      if (r >= 3.8) {
+      if (r >= 5) {
         ctx.save();
         ctx.translate(p.x, p.y);
-        const s = r / 14.5;   // 24-unit glyph → ~0.83 × badge diameter
+        const s = r / 11;   // 24-unit glyph → fills the badge edge-to-edge
         ctx.scale(s, s);
         ctx.translate(-12, -12);
         ctx.fillStyle = "rgba(244,249,255,0.95)";
@@ -446,8 +446,8 @@
     biomass:"🌿",hydro:"💧",nuclear:"☢️",
   };
   const mEmoji=(slug)=>MASTR_EMOJI[slug]||"⚡";
-  // floor is 4px so even the smallest marker fits its icon glyph
-  const mRadius=(mw)=>Math.max(4,Math.min(13,2.4+Math.sqrt(Math.max(0.001,mw))*0.9));
+  // floor is 7px so even the smallest marker's icon glyph stays legible
+  const mRadius=(mw)=>Math.max(7,Math.min(17,4+Math.sqrt(Math.max(0.001,mw))*1.1));
 
   function fetchMastr(slug,markers){
     const key=slug+":"+markers;

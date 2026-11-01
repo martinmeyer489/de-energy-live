@@ -124,6 +124,9 @@ class Handler(BaseHTTPRequestHandler):
             mimetypes.guess_type(target.name)[0] or "application/octet-stream"
         self.send_response(200)
         self.send_header("Content-Type", ctype)
+        if target.suffix in (".html", ".js", ".css"):
+            # app code changes often; force revalidation so deploys show up
+            self.send_header("Cache-Control", "no-cache")
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()
         if self.command != "HEAD":
