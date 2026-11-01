@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Power Grid Map — live electricity signals</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>"/>
+<link rel="stylesheet" href="vendor/leaflet.css"/>
+<link rel="stylesheet" href="css/style.css"/>
+</head>
+<body>
+<div id="map"></div>
+
+<header id="topbar">
+  <div class="brand">
+    <span class="bolt">⚡</span>
+    <div>
+      <div class="title">Power Grid Map</div>
+      <div class="subtitle" id="clock">—</div>
+    </div>
+  </div>
+
+  <nav id="signals">
+    <button class="sig-btn" data-sig="price">⚡ Electricity price</button>
+    <button class="sig-btn active" data-sig="carbon">🌿 Carbon intensity</button>
+    <button class="sig-btn" data-sig="renewable">♻️ Renewable share</button>
+  </nav>
+
+  <label class="flow-toggle">
+    <input type="checkbox" id="flowToggle" checked/>
+    <span>Exchange flows</span>
+  </label>
+
+  <label class="flow-toggle">
+    <input type="checkbox" id="battToggle"/>
+    <span>🔋 Batteries</span>
+  </label>
+</header>
+
+<div id="timeline">
+  <button id="playBtn" title="Play">▶</button>
+  <input type="range" id="hourSlider" min="0" max="23" step="1" value="12"/>
+  <span id="hourLabel">12:00</span>
+</div>
+
+<aside id="panel" class="hidden">
+  <button id="panelClose">✕</button>
+  <div id="panelBody"></div>
+</aside>
+
+<div id="legend">
+  <div id="legendTitle"></div>
+  <div id="legendBar"></div>
+  <div id="legendTicks"></div>
+</div>
+
+<div id="tooltip" class="hidden"></div>
+
+<script src="vendor/leaflet.js"></script>
+<script src="js/data-provider.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

@@ -163,3 +163,22 @@ python3 -m unittest discover -s tests   # stdlib, no deps needed
 
 Note: SMARD reports energy per interval (MWh); the client converts to
 average MW. energy-charts reports power (MW) directly.
+
+## Web stack (single container)
+
+`docker compose up -d` builds and runs the whole energy stack — public entry
+on `127.0.0.1:8090` (serve via Cloudflare Tunnel or your own proxy):
+
+- `/` — unified layer map (`map/`): EU price choropleth with 72h/15-min
+  playback, world carbon/renewable choropleths, flow animation, MaStR unit
+  markers + per-state capacity
+- `/grid/` — world power-grid map (`grid/`), live data via
+  `grid/build/refresh_loop.sh` (15-min refresh)
+- `/price/` — European price map (`price/`), data via
+  `price/refresh_loop.sh` (30-min refresh)
+- `/de/`, `/api/*`, `/geo/*` — MaStR/grid dashboard + API (`main.py web`,
+  needs `data/mastr/mastr.db`, ~9.7M units — gitignored, kept on the host)
+- `/tabs` — legacy multi-app iframe shell (`unified/`)
+
+Data under `data/`, `grid/data/*.json`, `price/data/` is generated at
+runtime and gitignored.

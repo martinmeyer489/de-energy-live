@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Energy Maps — live electricity</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>">
+<style>
+  :root{--bg:#0b1220;--bar:#0f1a2e;--edge:#1c2a45;--fg:#dbe4f3;--mut:#8ea0c2;--acc:#4a90d9}
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{font:14px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+       background:var(--bg);color:var(--fg);display:flex;flex-direction:column}
+  header{display:flex;align-items:center;gap:16px;height:48px;padding:0 14px;
+         background:var(--bar);border-bottom:1px solid var(--edge);flex:0 0 auto}
+  .brand{display:flex;align-items:center;gap:8px;font-weight:700;font-size:15px;
+         white-space:nowrap}
+  .brand .bolt{font-size:18px}
+  nav{display:flex;gap:4px;flex:1;min-width:0;overflow-x:auto}
+  nav a{padding:7px 13px;border-radius:8px;color:var(--mut);text-decoration:none;
+        font-weight:600;white-space:nowrap}
+  nav a:hover{color:var(--fg);background:#16223c}
+  nav a.active{color:#fff;background:var(--acc)}
+  .open{font-size:12px;color:var(--mut);text-decoration:none;white-space:nowrap}
+  .open:hover{color:var(--fg)}
+  main{flex:1;position:relative}
+  iframe{position:absolute;inset:0;width:100%;height:100%;border:0;display:none}
+  iframe.on{display:block}
+  @media (max-width:560px){.brand span.txt{display:none}}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand"><span class="bolt">⚡</span><span class="txt">Energy Maps</span></div>
+  <nav id="tabs">
+    <a href="#world"   data-app="world">World grid</a>
+    <a href="#germany" data-app="germany">Germany</a>
+    <a href="#prices"  data-app="prices">Prices</a>
+  </nav>
+  <a class="open" id="openRaw" href="/grid/" target="_blank" rel="noopener">open raw ↗</a>
+</header>
+<main id="frames"></main>
+<script>
+const APPS = {
+  world:   {src: "/grid/",  title: "World grid"},
+  germany: {src: "/de/",    title: "Germany"},
+  prices:  {src: "/price/", title: "Prices"},
+};
+const ALIAS = {world:"world", grid:"world",
+               germany:"germany", de:"germany",
+               prices:"prices", price:"prices"};
+
+const frames = document.getElementById("frames");
+const tabs = [...document.querySelectorAll("#tabs a")];
+const openRaw = document.getElementById("openRaw");
+let current = null;
+
+function appFromHash() {
+  const h = location.hash.replace(/^#\/?/, "").split(/[/?]/)[0];
+  return ALIAS[h] || "world";
+}
+
+function activate(name, push) {
+  if (!APPS[name]) name = "world";
+  if (name === current) return;
+  current = name;
+  let frame = frames.querySelector(`iframe[data-app="${name}"]`);
+  if (!frame) {
+    frame = document.createElement("iframe");
+    frame.dataset.app = name;
+    frame.src = APPS[name].src;
+    frame.title = APPS[name].title;
+    frames.appendChild(frame);
+  }
+  frames.querySelectorAll("iframe").forEach(f =>
+    f.classList.toggle("on", f === frame));
+  tabs.forEach(a => a.classList.toggle("active", a.dataset.app === name));
+  openRaw.href = APPS[name].src;
+  document.title = APPS[name].title + " · Energy Maps";
+  const hash = "#" + name;
+  if (push) history.pushState(null, "", hash);
+  else history.replaceState(null, "", hash);
+}
+
+tabs.forEach(a => a.addEventListener("click", e => {
+  e.preventDefault();
+  activate(a.dataset.app, true);
+}));
+addEventListener("hashchange", () => activate(appFromHash(), false));
+activate(appFromHash(), false);
+</script>
+</body>
+</html>

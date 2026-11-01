@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Electricity Prices · Europe</title>
+<link rel="stylesheet" href="vendor/leaflet.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="map"></div>
+
+<header class="card title-card">
+  <div class="title-row">
+    <h1>Electricity Prices</h1>
+    <span id="live-chip" class="chip">LIVE</span>
+  </div>
+  <p class="sub">Day-ahead spot price · European bidding zones</p>
+</header>
+
+<div id="tooltip" class="tooltip hidden"></div>
+
+<aside id="panel" class="card panel hidden">
+  <button id="panel-close" class="panel-close" aria-label="Close">×</button>
+  <h2 id="p-name">Zone</h2>
+  <div id="p-sub" class="sub"></div>
+  <div class="price-hero">
+    <div>
+      <div id="p-price" class="big-price">–</div>
+      <div class="sub">EUR/MWh · <span id="p-ctkwh"></span></div>
+    </div>
+    <div class="res-badge" id="p-res"></div>
+  </div>
+  <canvas id="chart" width="640" height="220"></canvas>
+  <div id="p-stats" class="stats"></div>
+  <div class="section">
+    <h3>Carbon intensity <span class="est">est.</span></h3>
+    <div id="p-co2" class="co2-row"></div>
+  </div>
+  <div class="section">
+    <h3>Generation mix</h3>
+    <div id="p-mixbar" class="mixbar"></div>
+    <div id="p-mixlist" class="mixlist"></div>
+  </div>
+  <div class="section hidden" id="p-de-sec">
+    <h3>Germany · TSO control areas</h3>
+    <div id="p-de" class="deregs"></div>
+    <div class="co2-note">State colors on the map: renewable share of
+      generation, from SMARD control-area data.</div>
+  </div>
+  <div class="section">
+    <h3>Cross-border flows</h3>
+    <div id="p-flows" class="flows"></div>
+  </div>
+  <div class="src-note" id="p-src"></div>
+</aside>
+
+<footer class="card timebar">
+  <button id="play" class="play" aria-label="Play">▶</button>
+  <div class="slider-wrap">
+    <input id="slider" type="range" min="0" max="0" value="0" step="1">
+    <div class="time-row">
+      <span id="t-label" class="t-label">–</span>
+      <span id="t-range" class="t-range"></span>
+    </div>
+  </div>
+</footer>
+
+<div class="card legend">
+  <div class="legend-title">€/MWh</div>
+  <div class="legend-bar" id="legend-bar"></div>
+  <div class="legend-ticks"><span id="lg-min"></span><span id="lg-mid"></span><span id="lg-max"></span></div>
+</div>
+
+<div id="err" class="err hidden"></div>
+
+<script src="vendor/leaflet.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

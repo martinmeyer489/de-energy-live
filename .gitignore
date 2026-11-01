@@ -3,8 +3,11 @@ __pycache__/
 .venv/
 venv/
 *.egg-info/
-build/
+/build/
 dist/
 charts/
-data/
+/data/
+grid/data/data.json
+grid/data/batteries.json
+price/data/
 .pytest_cache/

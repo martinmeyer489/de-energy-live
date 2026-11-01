@@ -1,0 +1,11 @@
+services:
+  energy:
+    build: .
+    image: de-energy-stack:latest
+    restart: unless-stopped
+    ports:
+      # localhost only — public access via Cloudflare Tunnel
+      # (energy.martin-agent.win -> localhost:8090).
+      - "127.0.0.1:8090:8000"
+    volumes:
+      - .:/app
