@@ -7,7 +7,7 @@ venv/
 dist/
 charts/
 /data/
-grid/data/data.json
-grid/data/batteries.json
+map/data/data.json
 price/data/
+price/geo_raw.geojson
 .pytest_cache/

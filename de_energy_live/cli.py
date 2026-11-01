@@ -561,7 +561,7 @@ def main(argv: list[str] | None = None) -> int:
         "regions", help="per-control-area snapshot (50Hertz, Amprion, TenneT, TransnetBW)"
     ).set_defaults(f=cmd_regions)
 
-    pweb = sub.add_parser("web", help="live web dashboard (http.server)")
+    pweb = sub.add_parser("web", help="JSON API server (http.server)")
     pweb.add_argument("--host", default="0.0.0.0")
     pweb.add_argument("--port", type=int, default=8000)
     pweb.set_defaults(f=cmd_web)

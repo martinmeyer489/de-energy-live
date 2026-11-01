@@ -3,12 +3,9 @@
 
   /               -> unified layer map (static files under map/, served here)
   /map/*          -> static assets of the unified map app (map/ dir)
-  /tabs           -> legacy iframe shell (unified/index.html, DEV-52)
-  /grid*          -> Power Grid Map static app on :8003 (prefix stripped)
-  /de*            -> de-energy-live MaStR dashboard on :8001 (prefix stripped)
   /price*         -> electricity-price-map static app on :8004 (prefix stripped)
-  /api/* /geo/* /chart.png /healthz  -> :8001 as-is (dashboard uses absolute paths)
-  everything else -> :8003 (legacy root paths of the world map keep working)
+  /api/* /geo/* /chart.png /healthz  -> :8001 as-is (map uses absolute paths)
+  everything else -> 404
 """
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from http.client import HTTPConnection
@@ -17,14 +14,13 @@ from urllib.parse import urlsplit, unquote
 import mimetypes
 
 BASE = Path(__file__).resolve().parent
-SHELL = BASE / "unified" / "index.html"
 MAP = BASE / "map"
 
 HOP = {"connection", "keep-alive", "transfer-encoding", "te", "trailer",
        "upgrade", "proxy-authorization", "proxy-authenticate"}
 
 # bare prefixes -> trailing-slash redirect so relative assets resolve right
-SLASH = {"/grid": "/grid/", "/de": "/de/", "/price": "/price/", "/map": "/"}
+SLASH = {"/price": "/price/", "/map": "/"}
 
 CTYPES = {".js": "text/javascript", ".geojson": "application/geo+json",
           ".map": "application/json"}
@@ -37,20 +33,14 @@ def route(raw_path):
         return "redirect", SLASH[p] + ("?" + q if q else "")
     if p in ("/", "/index.html"):
         return "map", "/index.html"
-    if p == "/tabs" or p == "/tabs/":
-        return "shell", raw_path
     if p.startswith("/map/"):
         return "map", unquote(p[4:])
-    if p.startswith("/grid/"):
-        return 8003, raw_path[5:]
-    if p.startswith("/de/"):
-        return 8001, raw_path[3:]
     if p.startswith("/price/"):
         return 8004, raw_path[6:]
     if p == "/chart.png" or p == "/healthz" or \
        p.startswith("/api/") or p.startswith("/geo/"):
         return 8001, raw_path
-    return 8003, raw_path
+    return None, raw_path
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -64,21 +54,11 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header("Content-Length", "0")
             self.end_headers()
             return
-        if port == "shell":
-            try:
-                data = SHELL.read_bytes()
-            except OSError:
-                self.send_error(502, "Shell unavailable")
-                return
-            self.send_response(200)
-            self.send_header("Content-Type", "text/html; charset=utf-8")
-            self.send_header("Content-Length", str(len(data)))
-            self.end_headers()
-            if self.command != "HEAD":
-                self.wfile.write(data)
-            return
         if port == "map":
             self._serve_map(path)
+            return
+        if port is None:
+            self.send_error(404, "Not found")
             return
         body = None
         n = int(self.headers.get("Content-Length") or 0)

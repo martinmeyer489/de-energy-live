@@ -3,7 +3,7 @@
  * Data sources (reused, no new fetchers):
  *   /price/data/data.json + geo/zones.geojson  EU day-ahead prices, 288×15min (electricity-price-map pipeline)
  *   /price/geo/de_states.geojson               16 Bundesländer polygons
- *   /grid/data/data.json + data/zones.geojson  world zones: price/carbon/renewable, 24h series, exchanges
+ *   /map/data/data.json + data/zones.geojson   world zones: price/carbon/renewable, 24h series, exchanges
  *   /api/mastr/map?type=<slug>                 MaStR register: state aggregates + geolocated unit markers
  */
 /* global L */
@@ -361,7 +361,7 @@
   }
   function ensureWorld(){
     if (S.worldGeo) return Promise.resolve();
-    if (!S._w) S._w=Promise.all([fetchJ("/grid/data/data.json"),fetchJ("/grid/data/zones.geojson")])
+    if (!S._w) S._w=Promise.all([fetchJ("/map/data/data.json"),fetchJ("/map/data/zones.geojson")])
       .then(([d,g])=>{S.world=d;S.worldGeo=g;})
       .catch(e=>{S._w=null;throw e;});
     return S._w;

@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
-"""Build data/zones.geojson + data/data.json for the electricity map.
+"""Build data/zones.geojson + data/data.json for the unified map's world layers.
 
-Inputs (fetched beforehand, see README):
+Inputs (fetched beforehand):
   /tmp/countries.geo.json   world countries, id = ISO3
-  /tmp/us-states.geojson    US states
+    https://raw.githubusercontent.com/johan/world.geo.json/master/countries.geo.json
+  /tmp/us-states.geojson    US states (properties.name)
+    https://raw.githubusercontent.com/PublicaMundi/MappingAPI/master/data/geojson/us-states.json
   /tmp/ne_admin1.geojson    Natural Earth admin-1 (provinces/counties/regions)
+    https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_10m_admin_1_states_provinces.geojson
 
 Output zones: every country is a zone keyed by ISO3, except:
   - USA -> ISO/bidding zones built from state polygons
@@ -13,13 +16,14 @@ Output zones: every country is a zone keyed by ISO3, except:
   - NOR -> NO1..NO5, SWE -> SE1..SE4, DNK -> DK1/DK2
   - GBR -> GB, except Northern Ireland admin-1 units -> SEM (with IRL)
 """
-import json, math, random
+import json, math, os, random
 
+HERE = os.path.dirname(os.path.abspath(__file__))
 COUNTRIES = "/tmp/countries.geo.json"
 US_STATES = "/tmp/us-states.geojson"
 ADMIN1 = "/tmp/ne_admin1.geojson"
-OUT_GEO = "/paperclip/workspaces/devin/electricity-map/data/zones.geojson"
-OUT_DATA = "/paperclip/workspaces/devin/electricity-map/data/data.json"
+OUT_GEO = os.path.join(HERE, "..", "data", "zones.geojson")
+OUT_DATA = os.path.join(HERE, "..", "data", "data.json")
 
 # ---------------- zone membership maps ----------------
 

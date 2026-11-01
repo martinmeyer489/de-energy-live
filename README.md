@@ -31,7 +31,7 @@ python main.py smard                  # official BNetzA load + generation
 python main.py chart -o out.png       # generation vs load chart
 python main.py regions                # snapshot per TSO control area
 python main.py watch -i 60            # auto-refreshing snapshot
-python main.py web                    # web dashboard on 0.0.0.0:8000
+python main.py web                    # JSON API on 0.0.0.0:8000
 
 # MaStR register data (one-time bulk download, then offline queries):
 python main.py mastr update           # fetch+parse Gesamtdatenexport -> data/mastr/mastr.db
@@ -68,24 +68,18 @@ filter: `In Betrieb`).
 capacity and lists consumer-unit counts separately. True demand by PLZ
 is not available in MaStR.
 
-## Web UI
+## Web API
 
 ```bash
-python main.py web --port 8000        # then open http://localhost:8000
+python main.py web --port 8000        # JSON API on 0.0.0.0:8000
 ```
 
-A single-page dashboard showing the live grid picture — current load,
-total generation, renewable share, national CO2 intensity estimate,
-day-ahead spot price, per-source generation bars, the stacked
-supply-vs-demand chart, and the regional control-area map (below).
-The page fetches fresh data every 60 s; server-side responses are
-cached ~55 s so the upstream API isn't hammered. Pure stdlib
-(`http.server`) — no extra dependencies; `/chart.png` reuses the
-`chart` command's matplotlib figure (needs `matplotlib`, else that
-one image fails but the page still works).
+Pure stdlib (`http.server`) — no extra dependencies; `/chart.png`
+reuses the `chart` command's matplotlib figure (needs `matplotlib`,
+else that one image fails but the rest still works). Server-side
+responses are cached ~55 s so the upstream API isn't hammered.
 
-Endpoints: `/` dashboard · `/map` → redirects to `/#regions` ·
-`/api/data` JSON snapshot (incl. `co2_intensity_gkwh`) ·
+Endpoints: `/api/data` JSON snapshot (incl. `co2_intensity_gkwh`) ·
 `/api/regions` per-zone JSON · `/api/mastr` register top-units
 JSON (only after `mastr update`) · `/api/mastr/capacity`
 installed capacity per source (`?bundesland=BY|Bayern` optional) ·
@@ -97,26 +91,7 @@ solar-park, onshore, offshore, coal, gas, biomass, hydro, nuclear;
 `?markers=` caps markers, default 2000 — only coords inside a
 Germany bbox count as located; the rest live in the state totals) ·
 `/geo/states` GeoJSON ·
-`/chart.png` · `/healthz`. The dashboard shows "Largest registered
-units", "Installed capacity", a browsable "Battery storage"
-section (with a small map) and a "MaStR unit map" section
-(per-state choropleth + largest located units per layer) once the
-MaStR cache exists.
-
-### Regional map (dashboard section)
-
-An Electricity Maps-style view of Germany split into its four TSO
-control areas — 50Hertz (east), Amprion (west/Ruhr), TenneT
-(north+south backbone), TransnetBW (Baden-Württemberg) — embedded in
-the main page. Each zone's live net load and realised generation come
-from SMARD's per-region series (15-min resolution), and the map
-colours the federal states by selectable signals: estimated CO2
-intensity (generation mix × lifecycle emission factors), renewable
-share, net load, and self-sufficiency (generation/load). Click a
-region for its mix breakdown. State→zone assignment is approximate —
-control-area borders do not follow state borders exactly. The
-national CO2 card uses the same lifecycle factors on the
-energy-charts national mix.
+`/chart.png` · `/healthz`.
 
 ## Data
 
@@ -149,7 +124,7 @@ de_energy_live/
                          streaming XML scanner, sqlite cache builder
   cli.py                 argparse CLI (now/today/smard/chart/regions/web/watch/mastr)
   regional.py            per-control-area snapshots (load, mix, CO2, self-sufficiency)
-  web.py                 stdlib http.server dashboard + regional map
+  web.py                 stdlib http.server JSON API
   bundeslaender.geo.json state polygons for the map (deutschlandGeoJSON, CC-BY)
 main.py                  thin entry point
 ```
@@ -170,15 +145,13 @@ average MW. energy-charts reports power (MW) directly.
 on `127.0.0.1:8090` (serve via Cloudflare Tunnel or your own proxy):
 
 - `/` — unified layer map (`map/`): EU price choropleth with 72h/15-min
-  playback, world carbon/renewable choropleths, flow animation, MaStR unit
+  playback, world carbon/renewable choropleths (data in `map/data/`,
+  refreshed by `map/build/refresh_loop.sh`), flow animation, MaStR unit
   markers + per-state capacity
-- `/grid/` — world power-grid map (`grid/`), live data via
-  `grid/build/refresh_loop.sh` (15-min refresh)
 - `/price/` — European price map (`price/`), data via
   `price/refresh_loop.sh` (30-min refresh)
-- `/de/`, `/api/*`, `/geo/*` — MaStR/grid dashboard + API (`main.py web`,
+- `/api/*`, `/geo/*`, `/chart.png` — MaStR/energy API (`main.py web`,
   needs `data/mastr/mastr.db`, ~9.7M units — gitignored, kept on the host)
-- `/tabs` — legacy multi-app iframe shell (`unified/`)
 
-Data under `data/`, `grid/data/*.json`, `price/data/` is generated at
+Data under `data/`, `map/data/data.json`, `price/data/` is generated at
 runtime and gitignored.
