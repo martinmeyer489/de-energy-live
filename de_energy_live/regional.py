@@ -62,6 +62,41 @@ EMISSION_FACTORS = {
     "Pumpspeicher (pumped storage)": 0,
 }
 
+DEFAULT_EMISSION_FACTOR = 400  # fallback for sources without a factor
+
+# Same lifecycle basis as EMISSION_FACTORS, keyed by the energy-charts
+# production-type names used in the national mix (cli._generation_snapshot).
+EC_EMISSION_FACTORS = {
+    "Fossil brown coal / lignite": EMISSION_FACTORS["Braunkohle (lignite)"],
+    "Fossil hard coal": EMISSION_FACTORS["Steinkohle (hard coal)"],
+    "Fossil coal-derived gas": EMISSION_FACTORS["Steinkohle (hard coal)"],
+    "Fossil oil": 650,
+    "Fossil gas": EMISSION_FACTORS["Erdgas (natural gas)"],
+    "Others": EMISSION_FACTORS["Sonstige Konventionelle (other conventional)"],
+    "Waste": EMISSION_FACTORS["Biomasse (biomass)"],
+    "Biomass": EMISSION_FACTORS["Biomasse (biomass)"],
+    "Geothermal": 38,
+    "Solar": EMISSION_FACTORS["Photovoltaik (solar)"],
+    "Hydro Run-of-River": EMISSION_FACTORS["Wasserkraft (hydro)"],
+    "Hydro water reservoir": EMISSION_FACTORS["Wasserkraft (hydro)"],
+    "Hydro pumped storage": EMISSION_FACTORS["Pumpspeicher (pumped storage)"],
+    "Nuclear": EMISSION_FACTORS["Kernenergie (nuclear)"],
+    "Wind offshore": EMISSION_FACTORS["Wind Offshore"],
+    "Wind onshore": EMISSION_FACTORS["Wind Onshore"],
+}
+
+
+def mix_co2_intensity(
+    gen, factors: dict | None = None
+) -> float | None:
+    """Generation-weighted CO2 intensity (g/kWh) of a (name, mw) mix."""
+    factors = factors or EMISSION_FACTORS
+    total = weighted = 0.0
+    for name, mw in gen:
+        total += mw
+        weighted += mw * factors.get(name, DEFAULT_EMISSION_FACTOR)
+    return weighted / total if total else None
+
 
 def _latest_before(ts: TimeSeries, before) -> float | None:
     hit = ts.latest(before)
@@ -87,16 +122,16 @@ def zone_snapshot(zone: str, resolution: str = "quarterhour") -> dict:
                     "name": name,
                     "mw": round(v, 1),
                     "renewable": name in RENEWABLE_LABELS,
-                    "co2_gkwh": EMISSION_FACTORS.get(name, 400),
+                    "co2_gkwh": EMISSION_FACTORS.get(
+                        name, DEFAULT_EMISSION_FACTOR
+                    ),
                 }
             )
     rows.sort(key=lambda r: -r["mw"])
 
     total = sum(r["mw"] for r in rows)
     ren = sum(r["mw"] for r in rows if r["renewable"])
-    co2 = (
-        sum(r["mw"] * r["co2_gkwh"] for r in rows) / total if total else None
-    )
+    co2 = mix_co2_intensity((r["name"], r["mw"]) for r in rows)
     load_mw = load_hit[1] if load_hit else None
 
     return {

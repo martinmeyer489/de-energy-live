@@ -7,6 +7,10 @@ Real-time German electricity supply & demand from two public, keyless APIs:
 - **smard.de** (Bundesnetzagentur) — official grid load ("Netzlast") and
   realised generation by source
 
+Plus register data from the **Marktstammdatenregister (MaStR)** — the full
+fleet of German generation/storage/consumer units with capacity, location
+(PLZ) and operator, via the daily bulk export (no API key).
+
 Pure Python 3.10+ standard library for data fetching; `matplotlib` is only
 needed for the `chart` command.
 
@@ -28,9 +32,41 @@ python main.py chart -o out.png       # generation vs load chart
 python main.py regions                # snapshot per TSO control area
 python main.py watch -i 60            # auto-refreshing snapshot
 python main.py web                    # web dashboard on 0.0.0.0:8000
+
+# MaStR register data (one-time bulk download, then offline queries):
+python main.py mastr update           # fetch+parse Gesamtdatenexport -> data/mastr/mastr.db
+python main.py mastr summary          # totals per unit category
+python main.py mastr top -n 10        # largest units per category
+python main.py mastr top --type offshore -n 20   # one category only
+python main.py mastr batteries -n 15  # largest storage units
+python main.py mastr plz 10115        # units + consumers at a postcode
+python main.py mastr plz --top -n 20  # postcodes ranked by registered capacity
 # or, after `pip install -e .`:
 de-energy now
 ```
+
+`mastr update` downloads only the needed members of the
+`Gesamtdatenexport_*.zip` (HTTP range reads against
+download.marktstammdatenregister.de — the full zip is ~3.3 GB, the needed
+parts ~1.8 GB), caches them under `data/mastr/zip/` and builds a sqlite db
+(`data/mastr/mastr.db`, gitignored). Re-run it any time to pick up the
+latest daily export; unchanged members are reused. Options:
+`--groups solar,wind` (subset), `--skip-operators` (skip the ~165 MB
+Marktakteure files; operator column then shows raw MaStR numbers),
+`--force`, `-j N` (parse workers).
+
+`mastr top` categories: coal, lignite, gas, thermal (other), biomass,
+hydro, pumped (pumped storage), offshore, onshore, solar (Freifläche
+parks), battery, nuclear (all decommissioned — use `--all`), othergen —
+plus `offshore-parks`/`onshore-parks` which aggregate turbines into wind
+parks. Add `--all` to include planned/decommissioned units (default
+filter: `In Betrieb`).
+
+**Demand-by-PLZ caveat:** MaStR registers consumer *units*
+(Stromverbraucher/Gasverbraucher) but no consumption in MW — so
+`mastr plz --top` ranks postcodes by registered generation+storage
+capacity and lists consumer-unit counts separately. True demand by PLZ
+is not available in MaStR.
 
 ## Web UI
 
@@ -39,29 +75,48 @@ python main.py web --port 8000        # then open http://localhost:8000
 ```
 
 A single-page dashboard showing the live grid picture — current load,
-total generation, renewable share, day-ahead spot price, per-source
-generation bars, and the stacked supply-vs-demand chart. The page fetches
-fresh data every 60 s; server-side responses are cached ~55 s so the
-upstream API isn't hammered. Pure stdlib (`http.server`) — no extra
-dependencies; `/chart.png` reuses the `chart` command's matplotlib figure
-(needs `matplotlib`, else that one image fails but the page still works).
+total generation, renewable share, national CO2 intensity estimate,
+day-ahead spot price, per-source generation bars, the stacked
+supply-vs-demand chart, and the regional control-area map (below).
+The page fetches fresh data every 60 s; server-side responses are
+cached ~55 s so the upstream API isn't hammered. Pure stdlib
+(`http.server`) — no extra dependencies; `/chart.png` reuses the
+`chart` command's matplotlib figure (needs `matplotlib`, else that
+one image fails but the page still works).
 
-Endpoints: `/` dashboard · `/map` regional map · `/api/data` JSON
-snapshot · `/api/regions` per-zone JSON · `/geo/states` GeoJSON ·
-`/chart.png` · `/healthz`.
+Endpoints: `/` dashboard · `/map` → redirects to `/#regions` ·
+`/api/data` JSON snapshot (incl. `co2_intensity_gkwh`) ·
+`/api/regions` per-zone JSON · `/api/mastr` register top-units
+JSON (only after `mastr update`) · `/api/mastr/capacity`
+installed capacity per source (`?bundesland=BY|Bayern` optional) ·
+`/api/mastr/batteries` paginated battery units
+(`?limit=&offset=&plz=<prefix>&bundesland=&sort=&all_types=1`) ·
+`/api/mastr/map?type=<slug>` per-Bundesland aggregation +
+geolocated markers for one unit layer (battery, storage, solar,
+solar-park, onshore, offshore, coal, gas, biomass, hydro, nuclear;
+`?markers=` caps markers, default 2000 — only coords inside a
+Germany bbox count as located; the rest live in the state totals) ·
+`/geo/states` GeoJSON ·
+`/chart.png` · `/healthz`. The dashboard shows "Largest registered
+units", "Installed capacity", a browsable "Battery storage"
+section (with a small map) and a "MaStR unit map" section
+(per-state choropleth + largest located units per layer) once the
+MaStR cache exists.
 
-### Regional map (`/map`)
+### Regional map (dashboard section)
 
 An Electricity Maps-style view of Germany split into its four TSO
 control areas — 50Hertz (east), Amprion (west/Ruhr), TenneT
-(north+south backbone), TransnetBW (Baden-Württemberg). Each zone's
-live net load and realised generation come from SMARD's per-region
-series (15-min resolution), and the map colours the federal states by
-selectable signals: estimated CO2 intensity (generation mix ×
-lifecycle emission factors), renewable share, net load, and
-self-sufficiency (generation/load). Click a region for its mix
-breakdown. State→zone assignment is approximate — control-area
-borders do not follow state borders exactly.
+(north+south backbone), TransnetBW (Baden-Württemberg) — embedded in
+the main page. Each zone's live net load and realised generation come
+from SMARD's per-region series (15-min resolution), and the map
+colours the federal states by selectable signals: estimated CO2
+intensity (generation mix × lifecycle emission factors), renewable
+share, net load, and self-sufficiency (generation/load). Click a
+region for its mix breakdown. State→zone assignment is approximate —
+control-area borders do not follow state borders exactly. The
+national CO2 card uses the same lifecycle factors on the
+energy-charts national mix.
 
 ## Data
 
@@ -90,7 +145,9 @@ de_energy_live/
   sources/
     energy_charts.py     Fraunhofer ISE energy-charts client
     smard.py             Bundesnetzagentur SMARD client
-  cli.py                 argparse CLI (now/today/smard/chart/regions/web/watch)
+    mastr.py             MaStR Gesamtdatenexport: remote-zip range reader,
+                         streaming XML scanner, sqlite cache builder
+  cli.py                 argparse CLI (now/today/smard/chart/regions/web/watch/mastr)
   regional.py            per-control-area snapshots (load, mix, CO2, self-sufficiency)
   web.py                 stdlib http.server dashboard + regional map
   bundeslaender.geo.json state polygons for the map (deutschlandGeoJSON, CC-BY)

@@ -1,0 +1,102 @@
+:root{
+  --bg:#0b1220; --bar:#0f1a2e; --edge:#1c2a45; --fg:#dbe4f3;
+  --mut:#8ea0c2; --acc:#4a90d9;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{font:13px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+     background:var(--bg);color:var(--fg);overflow:hidden}
+
+header{display:flex;align-items:center;gap:14px;height:44px;padding:0 14px;
+       background:var(--bar);border-bottom:1px solid var(--edge);
+       position:relative;z-index:1000}
+.brand{display:flex;align-items:center;gap:8px;font-weight:700;font-size:15px;white-space:nowrap}
+.brand .bolt{font-size:17px}
+.clock{color:var(--mut);font-size:12px;flex:1;min-width:0;
+       white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ext{display:flex;gap:2px}
+.ext a{padding:5px 9px;border-radius:7px;color:var(--mut);text-decoration:none;
+       font-weight:600;font-size:12px;white-space:nowrap}
+.ext a:hover{color:var(--fg);background:#16223c}
+@media (max-width:640px){.brand .txt,.clock{display:none}}
+
+#map{position:absolute;inset:44px 0 0 0;background:var(--bg)}
+
+/* left layer panel */
+#ctl{position:absolute;top:56px;left:10px;z-index:800;width:218px;
+     max-height:calc(100% - 76px);overflow-y:auto;
+     background:rgba(15,26,46,.94);border:1px solid var(--edge);
+     border-radius:10px;padding:10px 12px;backdrop-filter:blur(3px)}
+.sec{padding:6px 0 8px;border-bottom:1px solid var(--edge)}
+.sec:last-child{border-bottom:0;padding-bottom:2px}
+.sec-h{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+       color:var(--mut);margin-bottom:6px}
+#ctl label{display:flex;align-items:baseline;gap:7px;padding:3px 0;
+       flex-wrap:wrap;cursor:pointer;color:var(--fg);font-size:12.5px}
+#ctl label input{margin:0;flex:0 0 auto;position:relative;top:1px}
+#ctl label .hint{color:var(--mut);font-size:10.5px;margin-left:auto;white-space:nowrap}
+#ctl .dim{color:var(--mut);font-size:11.5px;padding:2px 0}
+#ctl label.disabled{opacity:.45;cursor:default}
+label.agg select{margin-left:auto;background:#16223c;color:var(--fg);
+       border:1px solid var(--edge);border-radius:5px;font-size:11px;
+       max-width:96px;padding:1px 2px}
+.mstat{margin-left:auto;color:var(--mut);font-size:10px;white-space:nowrap}
+
+/* time row */
+.trow{display:flex;align-items:center;gap:8px}
+#play{width:26px;height:24px;flex:0 0 auto;border:1px solid var(--edge);
+      border-radius:6px;background:#16223c;color:var(--fg);cursor:pointer;
+      font-size:11px;line-height:1}
+#play:hover{background:#1c2f52}
+#slider{flex:1;min-width:0;accent-color:var(--acc)}
+.tlabel{color:var(--mut);font-size:11px;margin-top:4px;
+        white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* legend */
+#legend{position:absolute;left:10px;bottom:14px;z-index:800;width:200px;
+        background:rgba(15,26,46,.92);border:1px solid var(--edge);
+        border-radius:8px;padding:8px 10px;font-size:11px}
+#legendTitle{color:var(--mut);margin-bottom:5px}
+#legendBar{height:9px;border-radius:4px}
+#legendTicks{display:flex;justify-content:space-between;color:var(--mut);
+             font-size:10px;margin-top:3px}
+
+/* coordinate readout */
+#coords{position:absolute;right:10px;bottom:30px;z-index:800;
+        background:rgba(15,26,46,.92);border:1px solid var(--edge);
+        border-radius:7px;padding:5px 10px;font:11.5px/1.2 ui-monospace,Menlo,monospace;
+        color:var(--fg);cursor:default;min-width:150px;text-align:center}
+#coords .z{color:var(--mut)}
+
+/* tooltip */
+#tooltip{position:fixed;z-index:1200;pointer-events:none;max-width:280px;
+         background:rgba(10,16,30,.95);border:1px solid var(--edge);
+         border-radius:8px;padding:8px 10px;font-size:12px;
+         transform:translate(14px,14px)}
+#tooltip .tt-name{font-weight:700;margin-bottom:2px}
+#tooltip .tt-val{display:flex;justify-content:space-between;gap:14px;color:var(--mut)}
+#tooltip .tt-val b{color:var(--fg);font-weight:600}
+.hidden{display:none!important}
+
+/* popups */
+.leaflet-popup-content-wrapper{background:#0f1a2e;color:var(--fg);
+       border:1px solid var(--edge);border-radius:9px}
+.leaflet-popup-tip{background:#0f1a2e;border:1px solid var(--edge)}
+.leaflet-popup-content{margin:10px 12px;font-size:12px;line-height:1.45}
+.leaflet-popup-content .pp-name{font-weight:700;margin-bottom:3px}
+.leaflet-popup-content .pp-row{display:flex;justify-content:space-between;gap:16px;color:var(--mut)}
+.leaflet-popup-content .pp-row b{color:var(--fg);font-weight:600}
+a.leaflet-popup-close-button{color:var(--mut)}
+
+/* unit markers: canvas must not swallow clicks meant for zones below —
+   marker popups are hit-tested manually in app.js */
+.leaflet-units-pane canvas{pointer-events:none}
+
+/* flow arrows */
+.flow-line{color:rgba(140,170,220,.45)}
+.flow-particle div{width:0;height:0;border-left:5px solid transparent;
+       border-right:5px solid transparent;border-bottom:9px solid #cfe2ff;
+       filter:drop-shadow(0 0 3px rgba(160,200,255,.8))}
+
+#err{position:absolute;top:60px;left:50%;transform:translateX(-50%);z-index:2000;
+     background:#5a1f1f;color:#ffd9d9;padding:10px 14px;border-radius:8px;font-size:13px}

@@ -10,7 +10,7 @@ from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
 from .model import TimeSeries
-from .sources import energy_charts, smard
+from .sources import energy_charts, mastr, smard
 
 BERLIN = ZoneInfo("Europe/Berlin")
 BAR_WIDTH = 30
@@ -277,6 +277,251 @@ def cmd_web(args: argparse.Namespace) -> None:
     web.serve(args.host, args.port)
 
 
+# --- MaStR register data -----------------------------------------------------
+
+# display groups for `mastr top`: (label, slug, SQL predicate on units)
+MASTR_TOP_GROUPS = [
+    ("Hard coal (Steinkohle)", "coal",
+     "category='verbrennung' AND subtype='Steinkohle'"),
+    ("Lignite (Braunkohle)", "lignite",
+     "category='verbrennung' AND subtype='Braunkohle'"),
+    ("Natural gas", "gas",
+     "category='verbrennung' AND subtype IN ('Erdgas','andere Gase')"),
+    ("Other thermal (oil/waste/heat/H2)", "thermal",
+     "category='verbrennung' AND subtype NOT IN ('Steinkohle','Braunkohle','Erdgas','andere Gase')"),
+    ("Biomass", "biomass", "category='biomasse'"),
+    ("Hydro", "hydro", "category='wasser'"),
+    ("Pumped storage", "pumped",
+     "category='speicher' AND subtype='Pumpspeicher'"),
+    ("Wind offshore", "offshore",
+     "category='wind' AND subtype='Windenergie auf See'"),
+    ("Wind onshore", "onshore",
+     "category='wind' AND subtype='Windenergie an Land'"),
+    ("Solar parks (Freifläche)", "solar",
+     "category='solar' AND subtype='Freiflächensolaranlage'"),
+    ("Battery storage", "battery",
+     "category='speicher' AND subtype!='Pumpspeicher'"),
+    ("Nuclear (all decommissioned)", "nuclear", "category='kernkraft'"),
+    ("Gas producer / geothermal / other", "othergen",
+     "category IN ('gaserzeuger','geo')"),
+]
+
+# extra groups aggregated at park level (wind turbines roll up to parks)
+MASTR_PARK_GROUPS = [
+    ("Largest wind parks (offshore, Σ turbines)", "offshore-parks",
+     "category='wind' AND subtype='Windenergie auf See' AND plant!=''"),
+    ("Largest wind parks (onshore, Σ turbines)", "onshore-parks",
+     "category='wind' AND subtype='Windenergie an Land' AND plant!=''"),
+]
+
+
+def _mastr_db(args):
+    try:
+        return mastr.open_db(getattr(args, "data_dir", mastr.DATA_DIR))
+    except RuntimeError as e:
+        print(f"\n{e}\n")
+        raise SystemExit(1)
+
+
+def _mastr_rows(conn, where: str, n: int, include_all: bool):
+    status = "" if include_all else "AND status='In Betrieb'"
+    return conn.execute(
+        f"SELECT * FROM units WHERE {where} {status} "
+        "ORDER BY netto_mw DESC LIMIT ?", (n,),
+    ).fetchall()
+
+
+def _print_unit_rows(conn, rows, show_subtype: bool = True) -> None:
+    ops = mastr.operator_names(conn, (r["operator_abr"] for r in rows))
+    for r in rows:
+        op = ops.get(r["operator_abr"]) or r["operator_abr"] or "—"
+        plant = r["plant"] if r["plant"] and r["plant"] != r["name"] else ""
+        label = r["name"] or plant or r["mastr_nr"]
+        if plant:
+            label = f"{plant} · {label}" if r["name"] else plant
+        sub = f"  [{r['subtype']}]" if show_subtype and r["subtype"] else ""
+        mw = f"{r['netto_mw']:,.0f} MW" if r["netto_mw"] is not None else "      —"
+        # big plants often lack postal addresses in MaStR (cadastral only) —
+        # fall back to Landkreis so the location column isn't blank
+        loc = f"{r['plz']} {r['ort']}".strip() or r["landkreis"]
+        yr = (r["inbetrieb"] or "")[:4]
+        status = "" if r["status"] == "In Betrieb" else f" ({r['status']})"
+        print(f"    {mw:>10}  {label[:38]:<38} {op[:30]:<30} {loc[:22]:<22} {yr}{sub}{status}")
+
+
+def cmd_mastr_update(args: argparse.Namespace) -> None:
+    groups = args.groups.split(",") if args.groups else None
+    mastr.update(
+        data_dir=args.data_dir,
+        groups=groups,
+        skip_operators=args.skip_operators,
+        force=args.force,
+        jobs=args.jobs,
+    )
+
+
+def _print_park_rows(conn, rows) -> None:
+    for r in rows:
+        mw = f"{r['s']:,.0f} MW"
+        loc = (f"{r['plz'] or ''} {r['ort'] or ''}".strip()
+               or (r["lk"] or "") or (r["bl"] or ""))
+        print(f"    {mw:>10}  {r['plant'][:38]:<38} {r['n']:>3} turbines"
+              f"  {loc[:24]}")
+
+
+def _mastr_park_rows(conn, where: str, n: int, include_all: bool):
+    status = "" if include_all else "AND status='In Betrieb'"
+    return conn.execute(
+        f"SELECT plant, COUNT(*) n, SUM(netto_mw) s, MAX(plz) plz,"
+        f" MAX(ort) ort, MAX(landkreis) lk, MAX(bundesland) bl FROM units"
+        f" WHERE {where} {status} GROUP BY plant ORDER BY s DESC LIMIT ?",
+        (n,),
+    ).fetchall()
+
+
+def cmd_mastr_top(args: argparse.Namespace) -> None:
+    conn = _mastr_db(args)
+    groups = [(l, s, w, False) for l, s, w in MASTR_TOP_GROUPS]
+    groups += [(l, s, w, True) for l, s, w in MASTR_PARK_GROUPS]
+    if args.type:
+        groups = [g for g in groups if g[1] == args.type]
+        if not groups:
+            slugs = ", ".join(g[1] for g in groups)
+            raise SystemExit(f"unknown type {args.type!r} — one of: {slugs}")
+    print("\nLargest registered units — MaStR Gesamtdatenexport")
+    print("(Nettonennleistung; default filter: Betriebsstatus = In Betrieb)\n")
+    for label, _slug, where, is_park in groups:
+        if is_park:
+            rows = _mastr_park_rows(conn, where, args.n, args.all)
+            if rows:
+                print(f"  {label}")
+                _print_park_rows(conn, rows)
+                print()
+            continue
+        rows = _mastr_rows(conn, where, args.n, args.all)
+        if not rows:
+            continue
+        print(f"  {label}")
+        _print_unit_rows(conn, rows, show_subtype=(args.type is not None))
+        print()
+    conn.close()
+
+
+def cmd_mastr_batteries(args: argparse.Namespace) -> None:
+    conn = _mastr_db(args)
+    where = "category='speicher'" if args.all_types else (
+        "category='speicher' AND subtype='Batterie'")
+    rows = _mastr_rows(conn, where, args.n, args.all)
+    print("\nLargest electricity storage units — MaStR"
+          + (" (all types)" if args.all_types else " (batteries)") + "\n")
+    _print_unit_rows(conn, rows)
+    total = conn.execute(
+        "SELECT COUNT(*) c, SUM(netto_mw) s FROM units WHERE " + where
+    ).fetchone()
+    print(f"\n  {total['c']:,} storage units registered, "
+          f"{(total['s'] or 0):,.0f} MW total"
+          + ("" if args.all_types else
+             "  — pumped storage via `mastr top --type pumped`") + "\n")
+    conn.close()
+
+
+def cmd_mastr_plz(args: argparse.Namespace) -> None:
+    conn = _mastr_db(args)
+    if args.top:
+        _mastr_plz_top(conn, args)
+        return
+    if not args.plz:
+        raise SystemExit("usage: mastr plz <PLZ>  (or: mastr plz --top)")
+    plz = args.plz
+    rows = conn.execute(
+        "SELECT * FROM units WHERE plz=? ORDER BY netto_mw DESC LIMIT ?",
+        (plz, args.n),
+    ).fetchall()
+    agg = conn.execute(
+        "SELECT COUNT(*) c, SUM(netto_mw) s FROM units WHERE plz=?", (plz,)
+    ).fetchone()
+    cons = conn.execute(
+        "SELECT * FROM consumers WHERE plz=? ORDER BY name LIMIT 50", (plz,)
+    ).fetchall()
+    print(f"\nMaStR units at PLZ {plz}")
+    print(f"  {agg['c']:,} generation/storage units, "
+          f"{(agg['s'] or 0):,.0f} MW net registered capacity")
+    by_cat = conn.execute(
+        "SELECT category, COUNT(*) c, SUM(netto_mw) s FROM units "
+        "WHERE plz=? GROUP BY category ORDER BY s DESC", (plz,),
+    ).fetchall()
+    for b in by_cat:
+        print(f"    {b['category']:<15} {b['c']:>5} units  {(b['s'] or 0):>9,.1f} MW")
+    if rows:
+        print(f"\n  largest units (top {min(len(rows), args.n)}):")
+        _print_unit_rows(conn, rows)
+    if cons:
+        print(f"\n  registered consumers ({len(cons)}):")
+        ops = mastr.operator_names(conn, (c["operator_abr"] for c in cons))
+        for c in cons:
+            op = ops.get(c["operator_abr"]) or ""
+            print(f"    {c['kind'][:5]:<5} {c['name'][:45]:<45} {op[:30]}")
+    print("\n  note: MaStR registers consumer *units* but no demand MW — "
+          "capacity shown is generation/storage, not consumption.")
+    print()
+    conn.close()
+
+
+def _mastr_plz_top(conn, args) -> None:
+    rows = conn.execute(
+        "SELECT plz, COUNT(*) c, SUM(netto_mw) s FROM units "
+        "WHERE plz != '' GROUP BY plz ORDER BY s DESC LIMIT ?", (args.n,),
+    ).fetchall()
+    # largest unit's Ort per displayed PLZ (only n lookups, not per group)
+    top_ort = {
+        r["plz"]: conn.execute(
+            "SELECT ort FROM units WHERE plz=? ORDER BY netto_mw DESC LIMIT 1",
+            (r["plz"],)).fetchone()["ort"]
+        for r in rows
+    }
+    cons = {
+        r["plz"]: r["c"]
+        for r in conn.execute(
+            "SELECT plz, COUNT(*) c FROM consumers GROUP BY plz")
+    }
+    print("\nTop PLZ areas by registered generation+storage capacity — MaStR\n")
+    print(f"    {'PLZ':<7} {'Ort (largest unit)':<24} {'units':>7} {'MW':>10}  consumers")
+    for r in rows:
+        print(f"    {r['plz']:<7} {(top_ort.get(r['plz']) or '')[:24]:<24} "
+              f"{r['c']:>7,} {(r['s'] or 0):>10,.0f}  {cons.get(r['plz'], 0)}")
+    print("\n  'consumers' = registered Strom/Gas consumption units "
+          "(MaStR carries no demand MW).")
+    print()
+    conn.close()
+
+
+def cmd_mastr_summary(args: argparse.Namespace) -> None:
+    conn = _mastr_db(args)
+    meta = mastr._load_meta(getattr(args, "data_dir", mastr.DATA_DIR))
+    print("\nMaStR register summary")
+    if meta.get("export_url"):
+        print(f"  export: {meta['export_url'].rsplit('/', 1)[-1]} "
+              f"(built {meta.get('built_at', '?')})")
+    rows = conn.execute(
+        "SELECT category, COUNT(*) c, SUM(netto_mw) s FROM units "
+        "GROUP BY category ORDER BY s DESC").fetchall()
+    print(f"\n    {'category':<14} {'units':>9} {'netto MW':>12}   biggest unit")
+    for r in rows:
+        top = conn.execute(
+            "SELECT name, netto_mw, status FROM units WHERE category=? "
+            "ORDER BY netto_mw DESC LIMIT 1", (r["category"],)).fetchone()
+        tn = (f"{(top['name'] or '?')[:32]} ({(top['netto_mw'] or 0):,.0f} MW"
+              + ("" if top["status"] == "In Betrieb"
+                 else f", {top['status'][:9]}") + ")"
+              if top else "")
+        print(f"    {r['category']:<14} {r['c']:>9,} {(r['s'] or 0):>12,.0f}   {tn}")
+    cons = conn.execute(
+        "SELECT kind, COUNT(*) c FROM consumers GROUP BY kind").fetchall()
+    print("\n  consumers: " + ", ".join(f"{c['kind']}: {c['c']:,}" for c in cons))
+    print()
+    conn.close()
+
+
 def cmd_watch(args: argparse.Namespace) -> None:
     try:
         while True:
@@ -325,6 +570,53 @@ def main(argv: list[str] | None = None) -> int:
     pw.add_argument("-i", "--interval", type=int, default=300)
     pw.add_argument("--csv", metavar="PATH", help="also append snapshots to CSV")
     pw.set_defaults(f=cmd_watch)
+
+    pm = sub.add_parser(
+        "mastr", help="MaStR register: biggest plants, batteries, PLZ aggregates"
+    )
+    pm.add_argument("--data-dir", default=mastr.DATA_DIR,
+                    help="cache dir (default data/mastr)")
+    msub = pm.add_subparsers(dest="mcmd", required=True)
+
+    mu = msub.add_parser("update",
+                         help="download + parse the Gesamtdatenexport (cached)")
+    mu.add_argument("--groups", metavar="LIST",
+                    help="comma-separated categories to parse "
+                    f"(default all: {','.join(mastr.UNIT_SPECS)})")
+    mu.add_argument("--skip-operators", action="store_true",
+                    help="don't resolve operator names (saves ~165 MB)")
+    mu.add_argument("--force", action="store_true",
+                    help="re-parse even if the export is unchanged")
+    mu.add_argument("-j", "--jobs", type=int, default=2)
+    mu.set_defaults(f=cmd_mastr_update)
+
+    mt = msub.add_parser("top", help="largest units per category")
+    mt.add_argument("-n", type=int, default=10)
+    mt.add_argument("--type", metavar="SLUG",
+                    help="one group only (coal,lignite,gas,thermal,biomass,"
+                    "hydro,pumped,offshore,onshore,solar,battery,nuclear,"
+                    "othergen,offshore-parks,onshore-parks)")
+    mt.add_argument("--all", action="store_true",
+                    help="include planned/decommissioned units")
+    mt.set_defaults(f=cmd_mastr_top)
+
+    mb = msub.add_parser("batteries", help="largest battery storage units")
+    mb.add_argument("-n", type=int, default=15)
+    mb.add_argument("--all", action="store_true",
+                    help="include planned/decommissioned units")
+    mb.add_argument("--all-types", action="store_true",
+                    help="all storage types, not just batteries")
+    mb.set_defaults(f=cmd_mastr_batteries)
+
+    mplz = msub.add_parser("plz", help="units at a postcode, or top postcodes")
+    mplz.add_argument("plz", nargs="?", help="German postcode, e.g. 10115")
+    mplz.add_argument("--top", action="store_true",
+                    help="rank PLZs by registered capacity")
+    mplz.add_argument("-n", type=int, default=15)
+    mplz.set_defaults(f=cmd_mastr_plz)
+
+    msub.add_parser("summary", help="register totals per category").set_defaults(
+        f=cmd_mastr_summary)
 
     args = p.parse_args(argv)
     args.f(args)

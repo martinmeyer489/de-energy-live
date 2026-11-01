@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Energy Map — one map, all layers</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>">
+<link rel="stylesheet" href="/map/vendor/leaflet.css">
+<link rel="stylesheet" href="/map/style.css">
+</head>
+<body>
+<header>
+  <div class="brand"><span class="bolt">⚡</span><span class="txt">Energy Map</span></div>
+  <span id="clock" class="clock">loading…</span>
+  <nav class="ext">
+    <a href="/grid/">World grid ↗</a>
+    <a href="/de/">Germany ↗</a>
+    <a href="/price/">Prices ↗</a>
+  </nav>
+</header>
+
+<div id="map"></div>
+
+<aside id="ctl">
+  <div class="sec">
+    <div class="sec-h">Zone layer</div>
+    <label><input type="radio" name="mode" value="price" checked> Day-ahead price <span class="hint">EU · 72h</span></label>
+    <label><input type="radio" name="mode" value="wcarbon"> Carbon intensity <span class="hint">world</span></label>
+    <label><input type="radio" name="mode" value="wrenew"> Renewable share <span class="hint">world</span></label>
+    <label><input type="radio" name="mode" value="wprice"> Electricity price <span class="hint">world</span></label>
+    <label><input type="radio" name="mode" value="none"> None</label>
+  </div>
+
+  <div class="sec" id="timeSec">
+    <div class="sec-h">Time</div>
+    <div class="trow">
+      <button id="play" title="play">▶</button>
+      <input id="slider" type="range" min="0" max="0" value="0">
+    </div>
+    <div id="tlabel" class="tlabel">–</div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-h">Grid</div>
+    <label><input type="checkbox" id="lyrFlows"> Exchange flows <span class="hint">animated</span></label>
+  </div>
+
+  <div class="sec">
+    <div class="sec-h">MaStR units · Germany</div>
+    <div id="mastrBox"><div class="dim">loading layer list…</div></div>
+    <label class="agg"><input type="checkbox" id="lyrStates"> State totals
+      <select id="aggType"></select>
+    </label>
+  </div>
+</aside>
+
+<div id="legend" class="hidden">
+  <div id="legendTitle"></div>
+  <div id="legendBar"></div>
+  <div id="legendTicks"></div>
+</div>
+
+<div id="coords">–, –</div>
+<div id="tooltip" class="hidden"></div>
+<div id="err" class="hidden"></div>
+
+<script src="/map/vendor/leaflet.js"></script>
+<script src="/map/app.js"></script>
+</body>
+</html>
