@@ -903,6 +903,9 @@ const ML_COLOR = {battery:"#f2c40f",storage:"#f2c40f",solar:"#e8912d",
   "solar-park":"#e8912d",onshore:"#79c0ff",offshore:"#a5d6ff",
   coal:"#9aa7b4",gas:"#d2a8ff",biomass:"#3fb950",hydro:"#39c5cf",
   nuclear:"#f85149"};
+const ML_ICON = {battery:"🔋",storage:"📦",solar:"☀️","solar-park":"🏞️",
+  onshore:"🌬️",offshore:"🌊",coal:"🏭",gas:"🔥",biomass:"🌿",
+  hydro:"💧",nuclear:"☢️"};
 const MMAP_STOPS = ["#141d30","#1f6feb","#3fb950","#f2c40f"]; // log scale
 let mmapType = "battery", mmapMetric = "units",
     mmapData = null, mmapGeo = null;
@@ -973,7 +976,7 @@ async function drawMmap(){
       () => $("maptip").style.display = "none");
   });
 
-  $("mmlgname").textContent = d.label +
+  $("mmlgname").textContent = (ML_ICON[mmapType] || "") + " " + d.label +
     (d.any_status ? " (all statuses)" : " (In Betrieb)") +
     (mmapMetric === "mw" ? " — MW" : " — units");
   $("mmlggrad").style.background =
@@ -1000,7 +1003,7 @@ async function drawMmap(){
 function renderMmapChips(layers){
   $("mmapchips").innerHTML = layers.map(l =>
     `<button class="chip${l.slug === mmapType ? " active" : ""}" ` +
-    `data-t="${l.slug}">${l.label}</button>`).join("");
+    `data-t="${l.slug}">${ML_ICON[l.slug] || "⚡"} ${l.label}</button>`).join("");
   $("mmapchips").querySelectorAll(".chip").forEach(c => c.onclick = () => {
     mmapType = c.dataset.t; loadMastrMap(); });
 }

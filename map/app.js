@@ -80,7 +80,106 @@
   [["zones",340],["states",350],["flows",360],["units",380]].forEach(([n,z])=>{
     map.createPane(n); map.getPane(n).style.zIndex=z;
   });
-  const unitRenderer = L.canvas({ pane:"units", padding:0.4 });
+  /* ---------- unit marker icons ----------
+   * Each icon is a 24x24 SVG path string (Path2D-compatible). `p` is the
+   * main silhouette drawn near-white; `d` is an optional detail pass drawn
+   * in the marker's badge colour, which reads as a cut-out. Glyphs are
+   * rasterised by IconCanvas (below), so thousands of markers stay cheap. */
+  const TURBINE =
+    "M12 2.4 13 9.5h-2z" +                    // blade up
+    "M17.9 12.6 11.5 10.1l1-1.8z" +           // blade down-right
+    "M6.1 12.6l6.4-2.5-1-1.8z" +              // blade down-left
+    "M13.3 9.2a1.3 1.3 0 1 1-2.6 0 1.3 1.3 0 0 1 2.6 0z"; // hub
+  const UNIT_ICONS = {
+    battery:{
+      p:"M2.5 8h16A1.5 1.5 0 0 1 20 9.5v6a1.5 1.5 0 0 1-1.5 1.5h-16A1.5 1.5 0 0 1 1 15.5v-6A1.5 1.5 0 0 1 2.5 8z" +
+        "M20.7 10.6H23v2.8h-2.3z",
+      d:"M12.9 9.6 9.5 13.2h2L10 16.6l3.9-4.6h-2l1.2-2.4z",
+    },
+    storage:{
+      p:"M12 3.5c4.4 0 8 1.3 8 3v10.8c0 1.7-3.6 3-8 3s-8-1.3-8-3V6.5c0-1.7 3.6-3 8-3z",
+      d:"M12 5.4c3.5 0 6.3 1 6.3 2.2s-2.8 2.2-6.3 2.2-6.3-1-6.3-2.2S8.5 5.4 12 5.4z",
+    },
+    solar:{
+      p:"M4.6 9.4h9.7l3.6 7.8H1z" +           // panel
+        "M9.3 17.8h1.6v2.4H9.3z" +            // post
+        "M6.4 20.8h7.4v1.3H6.4z" +            // base
+        "M21 3.6a2.7 2.7 0 1 1-5.4 0 2.7 2.7 0 0 1 5.4 0z", // sun
+      d:"M7.5 9.4h.9L7.1 17.2h-.9z" +         // grid lines
+        "M11.4 9.4h.9l1.3 7.8h-.9z" +
+        "M2.3 13h15.4l.4 1.2H1.9z",
+    },
+    onshore:{
+      p:TURBINE + "M11.4 10h1.2l.8 10.7h-2.8z", // pole
+    },
+    offshore:{
+      p:TURBINE + "M11.4 10h1.2l.7 8.9h-2.6z" + // short pole
+        "M.8 19.6c1.4-1.4 2.9-1.4 4.4 0s3 1.4 4.4 0 2.9-1.4 4.4 0" +
+        " 3 1.4 4.4 0 2.9-1.4 4.4 0V22H.8z",   // waves
+    },
+    gas:{
+      p:"M12 2.3c3.1 3.7 5.9 6.8 5.9 10.6a5.9 5.9 0 1 1-11.8 0" +
+        "c0-1.9.9-3.7 2-5.2.5 1.1 1.3 1.9 2.4 2.3-.4-2.8.3-5.5 1.5-7.7z",
+      d:"M12 13.8c1.4 1.8 2.6 3.2 2.6 4.7a2.6 2.6 0 1 1-5.2 0" +
+        "c0-1.5 1.2-2.9 2.6-4.7z",
+    },
+    coal:{
+      p:"M2 21V9l6 3.8V9l6 3.8V9l5 3.4V21z" + // sawtooth factory
+        "M20 21V3.8h2.2V21z",                 // chimney
+      d:"M4.2 21v-3h1.9v3z" +                 // windows
+        "M8.7 21v-3h1.9v3z" +
+        "M13.2 21v-3h1.9v3z",
+    },
+    biomass:{
+      p:"M4.6 19.4C4.6 11 10 5.6 19.4 5.6c0 8.4-5.4 13.8-14.8 13.8z",
+      d:"M6.5 19.1 16.4 7l.7.8L7.2 19.8z",    // vein
+    },
+    hydro:{
+      p:"M12 2.5c3.2 4.3 5.9 7.6 5.9 10.6a5.9 5.9 0 1 1-11.8 0" +
+        "C6.1 10.1 8.8 6.8 12 2.5z",
+      d:"M12 12.8c1.6 2.1 2.9 3.7 2.9 5.2a2.9 2.9 0 1 1-5.8 0" +
+        "c0-1.5 1.3-3.1 2.9-5.2z",
+    },
+    nuclear:{
+      p:"M7.25 3.77A9.5 9.5 0 0 1 16.75 3.77L13.6 9.23A3.2 3.2 0 0 0 10.4 9.23z" +
+        "M21.5 12A9.5 9.5 0 0 1 16.75 20.23L13.6 14.77A3.2 3.2 0 0 0 15.2 12z" +
+        "M7.25 20.23A9.5 9.5 0 0 1 2.5 12L8.8 12A3.2 3.2 0 0 0 10.4 14.77z" +
+        "M13.3 12a1.3 1.3 0 1 1-2.6 0 1.3 1.3 0 0 1 2.6 0z",
+    },
+    _:{ p:"M13 2 5 13.5h4.7L8.7 22l8.4-11.5h-4.7z" }, // fallback: bolt
+  };
+  UNIT_ICONS["solar-park"] = UNIT_ICONS.solar;
+
+  /* Canvas renderer that stamps the per-type glyph inside each badge.
+     Mirrors Leaflet 1.9's _updateCircle, then overlays the icon. */
+  const IconCanvas = L.Canvas.extend({
+    _updateCircle(l){
+      if (!this._drawing || l._empty()) return;
+      const p = l._point, ctx = this._ctx,
+            r = Math.max(Math.round(l._radius), 1);
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+      this._fillStroke(ctx, l);
+      const ic = UNIT_ICONS[l.options.icon] || UNIT_ICONS._;
+      if (r >= 3.8) {
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        const s = r / 14.5;   // 24-unit glyph → ~0.83 × badge diameter
+        ctx.scale(s, s);
+        ctx.translate(-12, -12);
+        ctx.fillStyle = "rgba(244,249,255,0.95)";
+        ctx.fill(new Path2D(ic.p));
+        if (ic.d) {
+          ctx.fillStyle = l.options.fillColor || "#0b0e14";
+          ctx.fill(new Path2D(ic.d));
+        }
+        ctx.restore();
+      }
+    }
+  });
+  const unitRenderer = (L.Browser.canvas && typeof Path2D === "function")
+    ? new IconCanvas({ pane:"units", padding:0.6 })
+    : L.canvas({ pane:"units", padding:0.6 });
 
   /* ---------- state ---------- */
   const S = {
@@ -341,7 +440,14 @@
     onshore:"#6fd3c9",offshore:"#4db0c9",gas:"#e05d4f",coal:"#8d8577",
     biomass:"#7cc24d",hydro:"#4a80b4",nuclear:"#b86bd6",
   };
-  const mRadius=(mw)=>Math.max(2.2,Math.min(13,2+Math.sqrt(Math.max(0.001,mw))*0.9));
+  const MASTR_EMOJI={
+    battery:"🔋",storage:"📦",solar:"☀️","solar-park":"🏞️",
+    onshore:"🌬️",offshore:"🌊",gas:"🔥",coal:"🏭",
+    biomass:"🌿",hydro:"💧",nuclear:"☢️",
+  };
+  const mEmoji=(slug)=>MASTR_EMOJI[slug]||"⚡";
+  // floor is 4px so even the smallest marker fits its icon glyph
+  const mRadius=(mw)=>Math.max(4,Math.min(13,2.4+Math.sqrt(Math.max(0.001,mw))*0.9));
 
   function fetchMastr(slug,markers){
     const key=slug+":"+markers;
@@ -350,8 +456,8 @@
       S.mastr[key]={data:d};return d;
     });
   }
-  function unitPopup(u,label){
-    return `<div class="pp-name">${esc(u.name)||label+" unit"}</div>
+  function unitPopup(u,label,slug){
+    return `<div class="pp-name">${mEmoji(slug)} ${esc(u.name)||label+" unit"}</div>
       <div class="pp-row"><span>capacity</span><b>${fmtMW(u.mw||0)}</b></div>
       ${u.subtype?`<div class="pp-row"><span>type</span><b>${esc(u.subtype)}</b></div>`:""}
       ${u.ort||u.plz?`<div class="pp-row"><span>location</span><b>${esc([u.plz,u.ort].filter(Boolean).join(" "))}</b></div>`:""}
@@ -377,9 +483,9 @@
   function buildUnitLayer(slug,label,markers){
     const col=MASTR_COLOR[slug]||"#9fb4d8";
     return L.layerGroup(markers.map(u=>L.circleMarker([u.lat,u.lon],{
-      renderer:unitRenderer,pane:"units",radius:mRadius(u.mw),
+      renderer:unitRenderer,pane:"units",radius:mRadius(u.mw),icon:slug,
       color:"#0b0e14",weight:0.5,fillColor:col,fillOpacity:0.85,
-    }).bindPopup(unitPopup(u,label))));
+    }).bindPopup(unitPopup(u,label,slug))));
   }
   function mastrToggle(slug,label,cb){
     const key=slug+":4000", rec=S.mastr[key];
@@ -411,9 +517,12 @@
     // batteries on by default; the rest are opt-in (solar has millions of units)
     const DEFAULT_ON=new Set(["battery"]);
     layerList.forEach(({slug,label})=>{
-      const opt=document.createElement("option");opt.value=slug;opt.textContent=label;sel.appendChild(opt);
+      const opt=document.createElement("option");opt.value=slug;
+      opt.textContent=mEmoji(slug)+" "+label;sel.appendChild(opt);
       const lb=document.createElement("label");
-      lb.innerHTML=`<input type="checkbox" data-slug="${slug}"> ${esc(label)} <span class="mstat"></span>`;
+      lb.innerHTML=`<input type="checkbox" data-slug="${slug}"> `+
+        `<span class="uemoji" style="background:${MASTR_COLOR[slug]||"#9fb4d8"}">`+
+        `${mEmoji(slug)}</span> ${esc(label)} <span class="mstat"></span>`;
       box.appendChild(lb);
       lb.querySelector("input").addEventListener("change",e=>mastrToggle(slug,label,e.target));
       if(DEFAULT_ON.has(slug)){const cb=lb.querySelector("input");cb.checked=true;mastrToggle(slug,label,cb);}
